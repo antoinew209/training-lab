@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Training Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Colonne unique ; 4 cours en bandeau sur toute la largeur ; une couleur par cours, reprise par les actions */
+:root{--m-day:#c0398a;--m-quiz:#2563c9;--m-fiche:#2e8540;--m-prog:#a07800;--c-devperso:#6b4fbb;--c-code:#b8560f;--c-agents:#b42335;--c-bases:#0f7b74;--narrow:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;--bg:#f3f4f7;--card:#ffffff;--fg:#1c1f26;--muted:#5d6370;--line:#d9dce3;--accent:#7a1f2b;--accent-fg:#ffffff;--ok:#1f6b45;--ok-bg:#e3f2e9;--ko:#a3312b;--ko-bg:#f9e4e2;
+--display:"Libre Caslon Text",Georgia,serif;--body:"IBM Plex Sans",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--m-day:#f08cc8;--m-quiz:#86b0f5;--m-fiche:#7fd08f;--m-prog:#e6c35c;--c-devperso:#b7a3ee;--c-code:#f0a35e;--c-agents:#f08a8f;--c-bases:#5cc4bb;--bg:#14161b;--card:#1d2027;--fg:#e8e9ed;--muted:#9aa0ad;--line:#2f333c;--accent:#d46a78;--accent-fg:#14161b;--ok:#6fcf97;--ok-bg:#183326;--ko:#f08a82;--ko-bg:#3a1d1b;color-scheme:dark}}
+:root[data-theme="dark"]{--m-day:#f08cc8;--m-quiz:#86b0f5;--m-fiche:#7fd08f;--m-prog:#e6c35c;--c-devperso:#b7a3ee;--c-code:#f0a35e;--c-agents:#f08a8f;--c-bases:#5cc4bb;--bg:#14161b;--card:#1d2027;--fg:#e8e9ed;--muted:#9aa0ad;--line:#2f333c;--accent:#d46a78;--accent-fg:#14161b;--ok:#6fcf97;--ok-bg:#183326;--ko:#f08a82;--ko-bg:#3a1d1b;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5}
+.wrap{max-width:720px;margin:0 auto;padding-block:8px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:12px}
+h1{font-family:var(--display);font-size:1.15rem;line-height:1.2;margin:0}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+h2{font-family:var(--display);font-size:1.25rem;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+body[data-track="devperso"]{--accent:var(--c-devperso)}body[data-track="code"]{--accent:var(--c-code)}body[data-track="agents"]{--accent:var(--c-agents)}body[data-track="bases"]{--accent:var(--c-bases)}
+.tracks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media (min-width:560px){.tracks{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.track{font-family:var(--body);font-weight:600;font-size:.95rem;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;padding:8px 4px;border-radius:8px;border:2px solid var(--tc);background:transparent;color:var(--tc);cursor:pointer;min-width:0}
+.track[aria-pressed="true"]{background:var(--tc);color:var(--bg)}
+.ctl{display:flex;min-width:0}.tabs4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:100%}.tabs4 .tab{padding:6px 2px;text-align:center;letter-spacing:.03em;border:2px solid var(--mc);color:var(--mc);background:transparent}
+.tabs4 .tab[aria-selected="true"]{background:var(--mc);border-color:var(--mc);color:var(--bg)}
+#t-day{--mc:var(--m-day)}#t-quiz{--mc:var(--m-quiz)}#t-fiche{--mc:var(--m-fiche)}#t-prog{--mc:var(--m-prog)}
+.stack{display:flex;flex-direction:column;gap:10px}.row{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.seg{justify-content:flex-start}
+.next.alt{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+.sure{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.sure span{color:var(--muted);font-size:.9rem;margin-right:auto}
+.opt.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.ti{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box}
+.link{font:inherit;font-size:.9rem;background:none;border:0;padding:4px 0 0;color:var(--accent);text-decoration:underline;cursor:pointer}
+.hl{background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:6px;outline:2px solid var(--accent);outline-offset:2px}
+.flash .front{font-family:var(--display);font-size:1.15rem;color:var(--fg)}.flash .back{color:var(--fg)}
+details.card summary{cursor:pointer;font-weight:600}
+.refl summary{cursor:pointer}.refl .front{font-family:var(--display);color:var(--fg);margin:8px 0 0}
+textarea{font:inherit;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.pr{display:grid;grid-template-columns:minmax(0,1fr) 30% auto;gap:8px;align-items:center;font-size:.9rem}.pt{min-width:0}
+.pb{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.pb i{display:block;height:100%;background:var(--ko)}.pb i.mid{background:var(--accent)}.pb i.ok{background:var(--ok)}
+.pill.mid{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}.pill.none{background:var(--line);color:var(--muted)}
+.txt{display:flex;gap:8px;flex-wrap:wrap}.txt input{font:inherit;flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.pick{font:inherit;font-size:.9rem;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);max-width:100%}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.card ul{margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.card li{line-height:1.4}
+.card h3{margin:0;font-size:1rem}
+.ftitle{font-family:var(--display);font-size:1.05rem;margin:8px 0 0;color:var(--muted)}
+.tab{font:inherit;font-size:.85rem;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:4px 12px;border-radius:999px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-variant-numeric:tabular-nums}
+.prog{height:4px;background:var(--line);border-radius:2px;overflow:hidden}.prog>i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.q{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.q p{margin:0;font-size:1.08rem}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{font:inherit;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);cursor:pointer}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt:disabled{cursor:default}
+.opt.good{background:var(--ok-bg);border-color:var(--ok);color:var(--fg)}
+.opt.bad{background:var(--ko-bg);border-color:var(--ko);color:var(--fg)}
+.rule{margin:0;padding:10px 12px;border-left:3px solid var(--accent);background:var(--bg);color:var(--fg);font-size:.95rem}
+.next{align-self:flex-end;font:inherit;font-weight:600;background:var(--accent);color:var(--accent-fg);border:0;border-radius:8px;padding:10px 18px;cursor:pointer}
+.score{font-family:var(--display);font-size:2.4rem;margin:0;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;font-weight:600}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.ko{background:var(--ko-bg);color:var(--ko)}
+.errs{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.errs li{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:.93rem}
+.errs b{display:block;margin-bottom:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.card p{margin:0;color:var(--muted)}
+.note{font-size:.85rem;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:reduce){.prog>i{transition:none}}
+</style>
+<div class="wrap">
+  <header>
+    <h1>Training Lab</h1>
+  </header>
+  <nav class="tracks" id="tracks" aria-label="Cours"></nav>
+  <div class="ctl">
+    <div class="tabs tabs4" role="tablist">
+      <button class="tab" id="t-day" role="tab">Jour</button>
+      <button class="tab" id="t-quiz" role="tab">Quiz</button>
+      <button class="tab" id="t-fiche" role="tab">Fiches</button>
+      <button class="tab" id="t-prog" role="tab">Progrès</button>
+    </div>
+  </div>
+  <select class="pick" id="pick" aria-label="Livre ou module"></select>
+  <section id="day"></section>
+  <section id="quiz" hidden></section>
+  <section id="fiche" hidden></section>
+  <section id="prog" hidden></section>
+  <p class="note" id="sync">Vos réponses sont enregistrées ; la routine du soir prépare la suite.</p>
+</div>
+<script type="text/plain" id="app">
+const DATA = window.__DATA__;
+// Livres Personal Dev : quiz devperso-N ↔ fiche (les quiz suivants, mixtes, ouvrent toutes les fiches du cours)
+const BOOKS = {"devperso-1":["Les 48 lois du pouvoir (Greene)","devperso-48-lois"],"devperso-2":["Influence (Cialdini)","devperso-influence"],"devperso-3":["Atomic Habits (Clear)","devperso-habitudes"],"devperso-4":["Les 7 habitudes (Covey)","devperso-covey"],"devperso-5":["Comment se faire des amis (Carnegie)","devperso-carnegie"],"devperso-6":["La psychologie de l'argent (Housel)","devperso-argent"]};
+const numOf = n => +(/-(\d+)$/.exec(n) || [0,0])[1];
+const TRACKS = DATA.subjects.map(s => {
+  const pre = s.key + "-", fiches = Object.keys(DATA.fiches).filter(n => n.startsWith(pre)).sort().map(n => ({...DATA.fiches[n], name:n}));
+  const units = Object.keys(DATA.quiz).filter(n => n.startsWith(pre) && numOf(n) > 0).sort((a,b) => numOf(a) - numOf(b)).map(n => {
+    const quiz = DATA.quiz[n], b = BOOKS[n], want = quiz.fiches || (b ? [b[1]] : null);
+    const fs = want ? fiches.filter(f => want.includes(f.name)) : [];
+    return { name:n, num:numOf(n), label: b ? b[0] : quiz.title, quiz, fiches: fs.length ? fs : fiches };
+  });
+  return { key:s.key, name:s.label, folder:s.folder, units, defis: s.key !== "devperso" };
+}).filter(t => t.units.length);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const md = s => esc(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>");
+const norm = s => String(s).trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+const $ = id => document.getElementById(id);
+const store = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} } };
+const day = (d=0) => { const t = new Date(); t.setDate(t.getDate()+d); return t.toISOString().slice(0,10); };
+const TODAY = day();
+const INTERVAL = [0,1,3,7,14];               // jours avant de revoir une question, selon sa « boîte » 0-4
+let S = (DATA.etat && DATA.etat.stats) || {};             // questions : {box, due, sureWrong}
+let F = (DATA.etat && DATA.etat.cards) || {};             // cartes : true = sue, false = à revoir
+let R = (DATA.etat && DATA.etat.refl) || {};              // réflexions hebdomadaires
+const gs = () => (window.google && google.script && google.script.run) ? google.script.run : null;
+const status = (msg) => { const el = document.getElementById("sync"); if (el) el.textContent = msg; };
+let saveTimer = null;
+const save = () => {                           // un seul envoi par pause de 2 s
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { const run = gs(); if (run) run.withFailureHandler(() => status("Progression non enregistrée (réseau ?). Elle sera renvoyée à la prochaine réponse.")).withSuccessHandler(() => status("Progression enregistrée.")).enregistrerEtat({stats:S, cards:F, refl:R}); }, 2000);
+};
+function sendResult(r){
+  const run = gs(); if (!run) return;
+  run.withFailureHandler(e => status("Résultat non envoyé : " + (e && e.message || e) + ". Réessayez plus tard."))
+     .withSuccessHandler(() => status("Résultat envoyé : la routine du soir s'en sert pour le prochain quiz."))
+     .enregistrerResultat(r);
+}
+
+let T = TRACKS.find(t => t.key === store.get("track")) || TRACKS[0], U = 0, view = store.get("view") || "day", mode = "read";
+const unitOf = {};
+let sessQuiz = null, sessDay = null, practice = null;
+
+// ---------- navigation ----------
+function renderTracks(){
+  document.body.dataset.track = T.key;
+  $("t-day").textContent = T.defis ? "Défi" : "Jour";
+  $("tracks").innerHTML = TRACKS.map((t,k)=>`<button class="track" id="tr${k}" style="--tc:var(--c-${t.key})" aria-pressed="${t===T}" title="${esc(t.name)}">${esc(t.name)}</button>`).join("");
+  TRACKS.forEach((t,k)=>$("tr"+k).addEventListener("click",()=>{ if (t !== T) { T = t; store.set("track", t.key); startTrack(); } }));
+}
+function renderPick(){
+  $("pick").innerHTML = T.units.map((u,k)=>`<option value="${k}"${k===U?" selected":""}>${esc(u.label)}</option>`).join("");
+  $("pick").hidden = T.units.length < 2 || !(view === "quiz" || view === "fiche");
+}
+function setUnit(k){ U = k; unitOf[T.key] = k; store.set("unit-"+T.key, k); sessQuiz = bookSession(); practice = null; renderPick(); render("quiz"); render("fiche"); }
+$("pick").addEventListener("change", () => setUnit(+$("pick").value));
+function startTrack(){
+  renderTracks();
+  let k = unitOf[T.key] ?? store.get("unit-"+T.key) ?? 0; if (!(k >= 0 && k < T.units.length)) k = 0;
+  sessDay = daySession(); setUnit(k); render("day"); render("prog"); tab(view);
+}
+const VIEWS = ["day","quiz","fiche","prog"];
+function tab(v){
+  view = v; store.set("view", v);
+  VIEWS.forEach(x => { $(x).hidden = x !== v; $("t-"+x).setAttribute("aria-selected", x === v); });
+  if (v === "prog") render("prog");
+  renderPick();
+}
+VIEWS.forEach(x => $("t-"+x).addEventListener("click", () => tab(x)));
+function render(v){ ({day:renderDay, quiz:()=>renderSession($("quiz"), sessQuiz), fiche:renderFiche, prog:renderProg})[v](); }
+
+// ---------- questions et sessions ----------
+const qid = (u,q) => `${T.units[u].name}|${q}`;
+const Q = (u,q) => T.units[u].quiz.questions[q];
+function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].quiz.title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
+function daySession(){
+  const due = [], fresh = T.units.map(()=>[]);
+  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
+  due.sort((a,b)=> (b.s.sureWrong?1:0)-(a.s.sureWrong?1:0) || a.s.box-b.s.box);
+  const items = due.slice(0,8).map(({u,q})=>({u,q}));
+  for (let r = 0; items.length < 8 && fresh.some(f=>r < f.length); r++) fresh.forEach(f => { if (items.length < 8 && f[r]) items.push(f[r]); });  // livres mélangés
+  return { title: "Quiz du jour", items, i:0, res:[] };
+}
+function grade(it, ok, sure){
+  const k = qid(it.u,it.q), s = S[k] || {box:0};
+  if (ok && sure) s.box = Math.min(s.box+1, 4); else if (!ok) s.box = 0;
+  s.due = ok ? day(Math.max(INTERVAL[s.box],1)) : TODAY;
+  s.sureWrong = !ok && sure;
+  S[k] = s; save();
+}
+const isOk = (q,ans) => q.type === "qcm" ? ans === q.a : q.a.some(x => norm(x) === norm(ans));
+const good = q => q.type === "qcm" ? q.o[q.a] : q.a[0];
+const shown = (q,ans) => q.type === "qcm" ? q.o[ans] : (ans || "(vide)");
+
+function renderSession(el, ss){
+  if (!ss.items.length) { el.innerHTML = `<div class="card"><h2>Rien à revoir aujourd'hui</h2><p>Toutes les questions vues sont à jour. Revenez demain, ou lancez le quiz complet d'un livre.</p></div>`; return; }
+  if (ss.i >= ss.items.length) return renderResult(el, ss);
+  const it = ss.items[ss.i], q = Q(it.u,it.q), n = ss.items.length;
+  const tag = ss === sessDay ? esc(T.units[it.u].label.replace(/ \(.*\)$/,"")) + " · " + esc(q.t) : esc(q.t);
+  const body = q.type === "qcm"
+    ? `<div class="opts">${q.o.map((o,k)=>`<button class="opt" data-k="${k}">${esc(o)}</button>`).join("")}</div>`
+    : `${q.h?`<p class="hint">Indice : ${esc(q.h)}</p>`:""}<input class="ti" autocomplete="off" aria-label="Votre réponse">`;
+  el.innerHTML = `<div class="stack">
+    <div class="bar"><span>${tag}</span><span>${ss.i+1} / ${n}</span></div>
+    <div class="prog"><i style="width:${ss.i/n*100}%"></i></div>
+    <div class="q"><p>${esc(q.q)}</p>${body}
+      <div class="sure" hidden><span>Votre certitude :</span><button class="next" data-s="1">Sûr</button><button class="next alt" data-s="0">Hésitant</button></div>
+      <div class="fb"></div></div></div>`;
+  let ans = null; const sureBox = el.querySelector(".sure");
+  if (q.type === "qcm") el.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => { el.querySelectorAll(".opt").forEach(x=>x.classList.remove("sel")); b.classList.add("sel"); ans = +b.dataset.k; sureBox.hidden = false; }));
+  else el.querySelector(".ti").addEventListener("input", e => { ans = e.target.value; sureBox.hidden = !ans.trim(); });
+  sureBox.querySelectorAll("button").forEach(b => b.addEventListener("click", () => answer(el, ss, it, q, ans, b.dataset.s === "1")));
+}
+function answer(el, ss, it, q, ans, sure){
+  const ok = isOk(q, ans);
+  ss.res[ss.i] = {ans, ok, sure}; grade(it, ok, sure);
+  if (q.type === "qcm") el.querySelectorAll(".opt").forEach(b => { const k = +b.dataset.k; b.disabled = true; b.classList.remove("sel"); if (k === q.a) b.classList.add("good"); else if (k === ans) b.classList.add("bad"); });
+  else el.querySelector(".ti").disabled = true;
+  el.querySelector(".sure").hidden = true;
+  const last = ss.i === ss.items.length - 1;
+  const warn = !ok && sure ? `<p class="hint">Vous étiez sûr : cette question reviendra en priorité.</p>` : "";
+  el.querySelector(".fb").innerHTML = `<p class="rule">${ok ? "Juste. " : "Faux. " + (q.type==="qcm" ? "" : "Réponse : " + esc(good(q)) + ". ")}${esc(q.r)}</p>${warn}
+    <div class="row">${ok ? "" : `<button class="next alt" data-act="see">Voir dans la fiche</button>`}<button class="next" data-act="go">${last ? "Voir le résultat" : "Question suivante"}</button></div>`;
+  el.querySelector('[data-act="go"]').focus();
+  el.querySelector('[data-act="go"]').addEventListener("click", () => { ss.i++; renderSession(el, ss); });
+  const see = el.querySelector('[data-act="see"]'); if (see) see.addEventListener("click", () => openInFiche(it.u, q));
+}
+function renderResult(el, ss){
+  const ok = ss.res.filter(r=>r.ok).length, by = {};
+  ss.items.forEach((it,k)=>{ const t = Q(it.u,it.q).t; by[t] = by[t] || [0,0]; by[t][1]++; if (ss.res[k].ok) by[t][0]++; });
+  if (!ss.sent) {
+    ss.sent = true;
+    const unit = ss === sessDay ? null : T.units[ss.items[0].u];
+    const texte = ss.items.map((it,k)=>{ const q = Q(it.u,it.q), r = ss.res[k]; return r.ok ? "" : `[${q.t}] ${q.q}\nRéponse : ${shown(q,r.ans)}${r.sure ? " (sûr)" : ""} ; attendu : ${good(q)}`; }).filter(Boolean).join("\n\n");
+    sendResult({quiz: unit ? unit.name : "jour", matiere: T.key, num: unit ? unit.num : null, scores: by, texte: (unit ? "" : "Quiz du jour (questions mélangées). ") + (texte || "Aucune erreur.")});
+  }
+  const rows = Object.entries(by).map(([t,[a,b]])=>{ const g = a/b >= .8; return `<tr><td>${esc(t)}</td><td class="n">${a} / ${b}</td><td><span class="pill ${g?"ok":"ko"}">${g?"Acquis":"À revoir"}</span></td></tr>`; }).join("");
+  const errs = ss.items.map((it,k)=>{ const q = Q(it.u,it.q), r = ss.res[k]; return r.ok ? "" : `<li><b>${esc(q.q)}</b>Votre réponse : ${esc(shown(q,r.ans))}${r.sure?" (sûr)":""}<br>Bonne réponse : ${esc(good(q))}<br><button class="link" data-k="${k}">Voir dans la fiche</button></li>`; }).join("");
+  el.innerHTML = `<div class="stack">
+    <div><p class="score">${ok} / ${ss.items.length}</p><p class="sub">${esc(ss.title)}. Un thème est « acquis » à partir de 80 % de bonnes réponses.</p></div>
+    <div class="tw"><table><thead><tr><th>Thème</th><th>Score</th><th>État</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${errs ? `<h2>Vos erreurs</h2><ul class="errs">${errs}</ul>` : `<p>Aucune erreur.</p>`}
+    <button class="next" id="again-${el.id}" style="align-self:flex-start">${ss === sessDay ? "Nouvelle série" : "Recommencer"}</button></div>`;
+  el.querySelectorAll(".link").forEach(b => b.addEventListener("click", () => { const it = ss.items[+b.dataset.k]; openInFiche(it.u, Q(it.u,it.q)); }));
+  $("again-"+el.id).addEventListener("click", () => { if (ss === sessDay) sessDay = daySession(); else sessQuiz = bookSession(); render(el.id); });
+}
+
+// ---------- fiches : lecture, cartes, lien depuis une erreur ----------
+const words = s => new Set(norm(s.replace(/\*\*/g,"")).split(/[^a-z0-9]+/).filter(w => w.length > 3));
+const itemText = it => it[0] === "t" ? it[1].map(r=>r.join(" ")).join(" ") : String(it[1]);
+function locate(u, q){                         // la carte et la ligne de fiche qui traitent la question
+  const law = /^Loi (\d+) :/.exec(q.r);
+  const target = words(q.q + " " + q.r + " " + q.t + " " + (q.type === "qcm" ? q.o[q.a] : ""));
+  let best = {score:-1};
+  T.units[u].fiches.forEach((f,fi)=>f.cards.forEach((c,ci)=>c.items.forEach((it,ii)=>{
+    let score;
+    if (law) score = it[0] === "li" && it[1].startsWith("**" + law[1] + ". ") ? 999 : -1;
+    else { const w = words(c.title + " " + itemText(it)); score = [...w].filter(x => target.has(x)).length + (words(c.title).has([...words(q.t)][0]) ? 1 : 0); }
+    if (score > best.score) best = {score, fi, ci, ii};
+  })));
+  return best;
+}
+function openInFiche(u, q){
+  const loc = locate(u, q); mode = "read";
+  if (U !== u) setUnit(u); else render("fiche");
+  tab("fiche");
+  const el = $(`it-${loc.fi}-${loc.ci}-${loc.ii}`) || $(`card-${loc.fi}-${loc.ci}`);
+  if (el) { el.classList.add("hl"); el.scrollIntoView({block:"center"}); }
+}
+function item(it, id){
+  const [k,v] = it;
+  if (k === "p") return `<p id="${id}">${md(v)}</p>`;
+  if (k === "h") return `<h3 id="${id}">${md(v)}</h3>`;
+  if (k === "li") return `<ul><li id="${id}">${md(v)}</li></ul>`;
+  if (k === "t") return `<div class="tw" id="${id}"><table><thead><tr>${v[0].map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${v.slice(1).map(r=>`<tr>${r.map(x=>`<td>${md(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  return "";
+}
+function cardsOf(u){                            // une carte = un principe : recto (titre), verso (explication)
+  const out = [];
+  T.units[u].fiches.forEach((f,fi)=>f.cards.forEach((c,ci)=>c.items.forEach((it,ii)=>{
+    if (it[0] === "li") { const m = /^\*\*(.+?)\*\* (?::|→) (.+)$/.exec(it[1]); if (m) out.push({key:`${T.units[u].fiches[fi].name}|${ci}|${ii}`, front:m[1], back:m[2], card:c.title}); }
+    if (it[0] === "t") it[1].slice(1).forEach((r,ri)=>out.push({key:`${T.units[u].fiches[fi].name}|${ci}|${ii}|${ri}`, front:r[0], back:r.slice(1).join(" — "), card:c.title}));
+  })));
+  return out;
+}
+function renderFiche(){
+  const fs = T.units[U].fiches, cards = cardsOf(U), known = cards.filter(c => F[c.key]).length;
+  const head = `<div class="row seg"><button class="tab" data-m="read" aria-selected="${mode==="read"}">Lire</button><button class="tab" data-m="train" aria-selected="${mode==="train"}">S'entraîner</button><span class="hint">${known} / ${cards.length} cartes sues</span></div>`;
+  let body;
+  if (mode === "read") body = fs.map((f,fi) => (fs.length>1?`<p class="ftitle">${esc(f.title)}</p>`:"") + f.cards.map((c,ci) => `<div class="card" id="card-${fi}-${ci}"><h2>${esc(c.title)}</h2>${c.items.map((it,ii)=>item(it,`it-${fi}-${ci}-${ii}`)).join("").replace(/<\/ul><ul>/g,"")}</div>`).join("")).join("");
+  else body = trainView(cards);
+  $("fiche").innerHTML = `<div class="stack">${head}${body}</div>`;
+  $("fiche").querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => { mode = b.dataset.m; practice = null; renderFiche(); }));
+  if (mode === "train") bindTrain(cards);
+}
+function trainView(cards){
+  if (!practice) practice = { list: cards.map((_,k)=>k).sort((a,b)=> (F[cards[a].key]?1:0)-(F[cards[b].key]?1:0)), i:0, flipped:false, ok:0 };
+  const p = practice;
+  if (p.i >= p.list.length) return `<div class="card"><h2>${p.ok} / ${p.list.length} sues</h2><p>Les cartes « à revoir » passent en premier à la prochaine séance.</p><button class="next" data-t="again" style="align-self:flex-start">Recommencer</button></div>`;
+  const c = cards[p.list[p.i]];
+  return `<div class="bar"><span>${esc(c.card)}</span><span>${p.i+1} / ${p.list.length}</span></div>
+    <div class="card flash"><p class="front">${esc(c.front)}</p>${p.flipped ? `<p class="back">${md(c.back)}</p>
+      <div class="row"><button class="next alt" data-t="no">À revoir</button><button class="next" data-t="yes">Je savais</button></div>`
+      : `<p class="hint">Rappelez-vous l'idée, puis retournez la carte.</p><button class="next" data-t="flip" style="align-self:flex-start">Retourner</button>`}</div>`;
+}
+function bindTrain(cards){
+  $("fiche").querySelectorAll("[data-t]").forEach(b => b.addEventListener("click", () => {
+    const p = practice, t = b.dataset.t;
+    if (t === "flip") p.flipped = true;
+    else if (t === "again") practice = null;
+    else { const c = cards[p.list[p.i]]; F[c.key] = t === "yes"; if (t === "yes") p.ok++; save(); p.i++; p.flipped = false; }
+    renderFiche();
+  }));
+}
+
+// ---------- jour : quiz court + principe de la semaine ----------
+function weekKey(){ const d = new Date(), j = new Date(d.getFullYear(),0,1); return d.getFullYear() + "-S" + Math.ceil(((d - j)/864e5 + j.getDay() + 1)/7); }
+function renderDay(){
+  if (T.defis) { $("day").innerHTML = `<div class="card"><h2>Défis ${esc(T.name)}</h2><p>Les défis se font sur une page à part, dans Claude : vous écrivez votre prompt et je l'analyse tout de suite.</p><div class="row"><a class="next" href="${esc(DATA.defisUrl)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir les défis</a></div></div>`; return; }
+  let refl = "", principe = "";
+  if (T.key === "devperso") {
+    const all = []; T.units.forEach((_,u)=>cardsOf(u).forEach(c=>all.push({...c, book:T.units[u].label})));
+    const wk = weekKey(), n = parseInt(wk.split("-S")[1]) + parseInt(wk), p = all[n % all.length], saved = R[wk]; principe = p.front;
+    refl = `<details class="card refl"${saved ? "" : " open"}><summary><b>Principe de la semaine</b> · ${esc(p.book)}</summary>
+      <p class="front">${esc(p.front)}</p><p>${md(p.back)}</p>
+      <label class="hint" for="refl-t">Où avez-vous vu ce principe cette semaine (chez vous, chez les autres) ?</label>
+      <textarea id="refl-t" rows="3">${esc(saved ? saved.text : "")}</textarea>
+      <div class="row"><span class="hint" id="refl-s">${saved ? "Enregistré le " + saved.date : ""}</span><button class="next" id="refl-b">Enregistrer</button></div>
+      <p class="hint">La routine du soir commentera votre réponse.</p></details>`;
+  }
+  $("day").innerHTML = `<div class="stack">${refl}<div id="dayq"></div></div>`;
+  if (refl) $("refl-b").addEventListener("click", () => { const wk = weekKey(); R[wk] = {text: $("refl-t").value, date: new Date().toLocaleDateString("fr-FR")}; save(); sendResult({quiz:"reflexion-" + wk, matiere:"devperso", num:null, scores:{}, texte:"Principe : " + principe + "\n" + R[wk].text}); $("refl-s").textContent = "Enregistré le " + R[wk].date; });
+  const dq = $("dayq"); dq.id = "day-q"; renderSession(dq, sessDay);
+}
+// renderSession appelle render(el.id) pour « Nouvelle série » : on redirige vers le jour
+const _render = render; render = v => _render(v === "day-q" ? "day" : v);
+
+// ---------- progrès ----------
+function renderProg(){
+  const lvl = a => a >= 3 ? ["Acquis","ok"] : a >= 1 ? ["En cours","mid"] : ["À revoir","ko"];
+  let dueN = 0;
+  const blocks = T.units.map((un,u)=>{
+    const th = {};
+    un.quiz.questions.forEach((q,k)=>{ const s = S[qid(u,k)]; (th[q.t] = th[q.t] || {sum:0,n:0,seen:0}); th[q.t].n++; if (s) { th[q.t].seen++; th[q.t].sum += s.box; if (s.due <= TODAY) dueN++; } });
+    const cards = cardsOf(u), known = cards.filter(c=>F[c.key]).length;
+    const rows = Object.entries(th).map(([t,v])=>{ const a = v.seen ? v.sum/v.n : 0, [lab,cls] = v.seen ? lvl(a) : ["Pas encore vu","none"];
+      return `<div class="pr"><span class="pt">${esc(t)}</span><span class="pb"><i class="${cls}" style="width:${Math.max(a/4*100, v.seen?6:0)}%"></i></span><span class="pill ${cls}">${lab}</span></div>`; }).join("");
+    return `<div class="card"><h2>${esc(un.label)}</h2>${rows}<p class="hint">Cartes sues : ${known} / ${cards.length}</p></div>`;
+  }).join("");
+  const defis = T.defis ? `<p class="hint">Défis : voir la page Défis (onglet Défi).</p>` : "";
+  $("prog").innerHTML = `<div class="stack">${defis}<p class="hint">${dueN} question${dueN>1?"s":""} à revoir aujourd'hui. Une question acquise revient après 1, 3, 7 puis 14 jours ; une erreur la fait revenir le jour même.</p>${blocks}</div>`;
+}
+
+startTrack();
+</script>
+<script>
+// Chargement : code d'accès (mémorisé sur l'appareil) → données → application
+(function(){
+  const API = "https://script.google.com/macros/s/AKfycbxdZ9ErXOVI9crBZkUGJlmmas2K7v_3B__jYfcPUPeGSw12DmszGCRiX3z4Xv-Q2_dDyQ/exec", KEY = "tl-key";
+  const $ = id => document.getElementById(id), box = () => $("day");
+  const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
+  const put = v => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) {} };
+  const m = /[#&]k=([^&]+)/.exec(location.hash);
+  if (m) { put(decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
+
+  // Même interface que google.script.run, pour que le code de la page ne change pas
+  function call(api, payload, ok, fail){
+    fetch(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get(), api: api }, payload)) })
+      .then(r => r.json()).then(j => j.error ? fail && fail(new Error(j.error)) : ok && ok(j))
+      .catch(e => fail && fail(e));
+  }
+  function runner(fail, ok){
+    return {
+      withFailureHandler: f => runner(f, ok), withSuccessHandler: s => runner(fail, s),
+      enregistrerEtat: x => call("etat", { etat: x }, ok, fail),
+      enregistrerResultat: x => call("resultat", { r: x }, ok, fail),
+    };
+  }
+  window.google = { script: { get run(){ return runner(); } } };
+
+  function ask(msg){
+    box().innerHTML = '<div class="card"><h2>Code d\'accès</h2><p>' + msg + '</p>' +
+      '<input class="pick" id="k-in" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Code d\'accès">' +
+      '<div class="row"><button class="next" id="k-ok">Valider</button></div></div>';
+    const go = () => { const v = $("k-in").value.trim(); if (v) { put(v); load(); } };
+    $("k-ok").addEventListener("click", go);
+    $("k-in").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+    $("k-in").focus();
+  }
+  function load(){
+    const k = get();
+    if (!k) return ask("Saisissez le code d'accès une fois : il reste mémorisé sur cet appareil.");
+    box().innerHTML = '<p class="note">Chargement…</p>';
+    fetch(API + "?api=page&key=" + encodeURIComponent(k)).then(r => r.json()).then(d => {
+      if (d.error === "code invalide") { put(""); return ask("Code incorrect. Vérifiez-le dans le journal d'Apps Script (fonction installer)."); }
+      if (d.error) throw new Error(d.error);
+      window.__DATA__ = d;
+      const s = document.createElement("script");
+      s.textContent = $("app").textContent;
+      document.body.appendChild(s);
+    }).catch(e => {
+      box().innerHTML = '<div class="card"><p>Chargement impossible (' + String(e && e.message || e).replace(/</g, "&lt;") + ').</p>' +
+        '<div class="row"><button class="next" id="k-retry">Réessayer</button></div></div>';
+      $("k-retry").addEventListener("click", load);
+    });
+  }
+  load();
+})();
+</script>
