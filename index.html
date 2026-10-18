@@ -76,6 +76,7 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
 .card p{margin:0;color:var(--muted)}
 .note{font-size:.85rem;color:var(--muted);margin:0}
 @media (prefers-reduced-motion:reduce){.prog>i{transition:none}}
+body:not(.ready) .ctl,body:not(.ready) #pick,body:not(.ready) #sync{display:none}
 </style>
 <div class="wrap">
   <header>
@@ -397,6 +398,7 @@ startTrack();
       const s = document.createElement("script");
       s.textContent = $("app").textContent;
       document.body.appendChild(s);
+      document.body.classList.add("ready");
     }).catch(e => {
       box().innerHTML = '<div class="card"><p>Chargement impossible (' + String(e && e.message || e).replace(/</g, "&lt;") + ').</p>' +
         '<div class="row"><button class="next" id="k-retry">Réessayer</button></div></div>';
