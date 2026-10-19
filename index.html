@@ -108,7 +108,7 @@ const TRACKS = DATA.subjects.map(s => {
   const units = Object.keys(DATA.quiz).filter(n => n.startsWith(pre) && numOf(n) > 0).sort((a,b) => numOf(a) - numOf(b)).map(n => {
     const quiz = DATA.quiz[n], b = BOOKS[n], want = quiz.fiches || (b ? [b[1]] : null);
     const fs = want ? fiches.filter(f => want.includes(f.name)) : [];
-    return { name:n, num:numOf(n), label: b ? b[0] : quiz.title, quiz, fiches: fs.length ? fs : fiches };
+    return { name:n, num:numOf(n), label: b ? b[0] : quiz.title, title: b ? `Quiz ${s.label} n°${numOf(n)} : ${b[0]}` : quiz.title, quiz, fiches: fs.length ? fs : fiches };
   });
   return { key:s.key, name:s.label, folder:s.folder, units, defis: s.key !== "devperso" };
 }).filter(t => t.units.length);
@@ -172,7 +172,7 @@ function render(v){ ({day:renderDay, quiz:()=>renderSession($("quiz"), sessQuiz)
 // ---------- questions et sessions ----------
 const qid = (u,q) => `${T.units[u].name}|${q}`;
 const Q = (u,q) => T.units[u].quiz.questions[q];
-function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].quiz.title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
+function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
 function daySession(){
   const due = [], fresh = T.units.map(()=>[]);
   T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
