@@ -341,8 +341,9 @@ function weekKey(){ const d = new Date(), j = new Date(d.getFullYear(),0,1); ret
 function renderDay(){
   if (!dayOk()) {
     const u = T.units.findIndex((_,k) => !readOk(k));
-    $("day").innerHTML = `<div class="card"><h2>${T.defis ? "Les fiches d'abord" : "Un livre d'abord"}</h2><p>${T.defis
-      ? `Les défis font appliquer le cours : lisez d'abord toutes les fiches de ${esc(T.name)}.`
+    const n = new Set(T.units.flatMap(un => un.fiches.map(f => f.name))).size;
+    $("day").innerHTML = `<div class="card"><h2>${T.defis ? (n > 1 ? "Les fiches d'abord" : "La fiche d'abord") : "Un livre d'abord"}</h2><p>${T.defis
+      ? `Les défis font appliquer le cours : lisez d'abord ${n > 1 ? `les ${n} fiches` : "la fiche"} de ${esc(T.name)}.`
       : "Le jour reprend les livres que vous avez lus : lisez d'abord la fiche d'un livre jusqu'au bout."}</p><div class="row"><button class="next" id="go-fiche-d">Ouvrir la fiche</button></div></div>`;
     $("go-fiche-d").addEventListener("click", () => openFiche(u)); return;
   }
