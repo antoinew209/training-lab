@@ -123,6 +123,10 @@ const INTERVAL = [0,1,3,7,14];               // jours avant de revoir une questi
 let S = (DATA.etat && DATA.etat.stats) || {};             // questions : {box, due, sureWrong}
 let F = (DATA.etat && DATA.etat.cards) || {};             // cartes : true = sue, false = à revoir
 let R = (DATA.etat && DATA.etat.refl) || {};              // réflexions hebdomadaires
+// Fiche d'abord : le quiz d'un livre/module s'ouvre une fois sa fiche lue (ou s'il est déjà commencé)
+const lu = f => !!F["lu|" + f];
+const started = u => T.units[u].quiz.questions.some((_,q) => S[qid(u,q)]);
+const readOk = u => T.units[u].fiches.every(f => lu(f.name)) || started(u);
 const gs = () => (window.google && google.script && google.script.run) ? google.script.run : null;
 const status = (msg) => { const el = document.getElementById("sync"); if (el) el.textContent = msg; };
 let saveTimer = null;
@@ -167,7 +171,14 @@ function tab(v){
   renderPick();
 }
 VIEWS.forEach(x => $("t-"+x).addEventListener("click", () => tab(x)));
-function render(v){ ({day:renderDay, quiz:()=>renderSession($("quiz"), sessQuiz), fiche:renderFiche, prog:renderProg})[v](); }
+function render(v){ ({day:renderDay, quiz:renderQuiz, fiche:renderFiche, prog:renderProg})[v](); }
+
+function renderQuiz(){
+  if (readOk(U)) return renderSession($("quiz"), sessQuiz);
+  const fs = T.units[U].fiches.filter(f => !lu(f.name));
+  $("quiz").innerHTML = `<div class="card"><h2>La fiche d'abord</h2><p>Lisez ${fs.length > 1 ? "les fiches" : "la fiche"} ${fs.map(f => "« " + esc(f.title) + " »").join(", ")} avant ce quiz : répondre de mémoire après la lecture fait bien mieux retenir que découvrir les questions avant.</p><div class="row"><button class="next" id="go-fiche">Ouvrir la fiche</button></div></div>`;
+  $("go-fiche").addEventListener("click", () => { mode = "read"; render("fiche"); tab("fiche"); window.scrollTo(0, 0); });
+}
 
 // ---------- questions et sessions ----------
 const qid = (u,q) => `${T.units[u].name}|${q}`;
@@ -175,7 +186,7 @@ const Q = (u,q) => T.units[u].quiz.questions[q];
 function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
 function daySession(){
   const due = [], fresh = T.units.map(()=>[]);
-  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
+  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ const s = S[qid(u,q)]; if (!s) { if (readOk(u)) fresh[u].push({u,q}); } else if (s.due <= TODAY) due.push({u,q,s}); }));
   due.sort((a,b)=> (b.s.sureWrong?1:0)-(a.s.sureWrong?1:0) || a.s.box-b.s.box);
   const items = due.slice(0,8).map(({u,q})=>({u,q}));
   for (let r = 0; items.length < 8 && fresh.some(f=>r < f.length); r++) fresh.forEach(f => { if (items.length < 8 && f[r]) items.push(f[r]); });  // livres mélangés
@@ -193,7 +204,9 @@ const good = q => q.type === "qcm" ? q.o[q.a] : q.a[0];
 const shown = (q,ans) => q.type === "qcm" ? q.o[ans] : (ans || "(vide)");
 
 function renderSession(el, ss){
-  if (!ss.items.length) { el.innerHTML = `<div class="card"><h2>Rien à revoir aujourd'hui</h2><p>Toutes les questions vues sont à jour. Revenez demain, ou lancez le quiz complet d'un livre.</p></div>`; return; }
+  if (!ss.items.length) { el.innerHTML = T.units.some((_,u) => readOk(u))
+    ? `<div class="card"><h2>Rien à revoir aujourd'hui</h2><p>Toutes les questions vues sont à jour. Revenez demain, ou lancez le quiz complet d'un livre.</p></div>`
+    : `<div class="card"><h2>Commencez par une fiche</h2><p>Le quiz du jour reprend les fiches que vous avez lues. Ouvrez l'onglet Fiches, lisez-en une jusqu'au bout, puis revenez.</p></div>`; return; }
   if (ss.i >= ss.items.length) return renderResult(el, ss);
   const it = ss.items[ss.i], q = Q(it.u,it.q), n = ss.items.length;
   const tag = ss === sessDay ? esc(T.units[it.u].label.replace(/ \(.*\)$/,"")) + " · " + esc(q.t) : esc(q.t);
@@ -289,7 +302,13 @@ function renderFiche(){
   let body;
   if (mode === "read") body = fs.map((f,fi) => (fs.length>1?`<p class="ftitle">${esc(f.title)}</p>`:"") + f.cards.map((c,ci) => `<div class="card" id="card-${fi}-${ci}"><h2>${esc(c.title)}</h2>${c.items.map((it,ii)=>item(it,`it-${fi}-${ci}-${ii}`)).join("").replace(/<\/ul><ul>/g,"")}</div>`).join("")).join("");
   else body = trainView(cards);
+  const done = fs.every(f => lu(f.name));
+  if (mode === "read") body += `<div class="row"><button class="next" id="fiche-lue">${done ? "Passer au quiz" : "J'ai lu la fiche · passer au quiz"}</button></div>`;
   $("fiche").innerHTML = `<div class="stack">${head}${body}</div>`;
+  if (mode === "read") $("fiche-lue").addEventListener("click", () => {
+    if (!done) { fs.forEach(f => F["lu|" + f.name] = true); save(); sessDay = daySession(); render("day"); }
+    render("quiz"); tab("quiz"); window.scrollTo(0, 0);
+  });
   $("fiche").querySelectorAll("[data-m]").forEach(b => b.addEventListener("click", () => { mode = b.dataset.m; practice = null; renderFiche(); }));
   if (mode === "train") bindTrain(cards);
 }
