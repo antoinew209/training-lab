@@ -127,7 +127,10 @@ let R = (DATA.etat && DATA.etat.refl) || {};              // réflexions hebdoma
 // Fiche d'abord : aucune question d'un livre/module (quiz ou quiz du jour) avant la lecture de sa fiche
 const lu = f => !!F["lu|" + f];
 const readOk = u => T.units[u].fiches.every(f => lu(f.name));
-const dayOk = () => T.defis ? T.units.every((_,u) => readOk(u)) : T.units.some((_,u) => readOk(u));
+// Jour et Défi après le quiz : un quiz est « fait » quand toutes ses questions ont reçu une réponse
+const quizDone = u => T.units[u].quiz.questions.every((_,q) => S[qid(u,q)]);
+const covered = f => T.units.some((un,u) => quizDone(u) && un.fiches.some(x => x.name === f));
+const dayOk = () => T.defis ? T.units.every(un => un.fiches.every(f => covered(f.name))) : T.units.some((_,u) => quizDone(u));
 function lockTabs(){ $("t-day").classList.toggle("locked", !dayOk()); $("t-quiz").classList.toggle("locked", !readOk(U)); }
 function openFiche(u){ mode = "read"; if (U !== u) setUnit(u); else render("fiche"); tab("fiche"); window.scrollTo(0, 0); }
 const gs = () => (window.google && google.script && google.script.run) ? google.script.run : null;
@@ -190,7 +193,7 @@ const Q = (u,q) => T.units[u].quiz.questions[q];
 function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
 function daySession(){
   const due = [], fresh = T.units.map(()=>[]);
-  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ if (!readOk(u)) return; const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
+  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ if (!quizDone(u)) return; const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
   due.sort((a,b)=> (b.s.sureWrong?1:0)-(a.s.sureWrong?1:0) || a.s.box-b.s.box);
   const items = due.slice(0,8).map(({u,q})=>({u,q}));
   for (let r = 0; items.length < 8 && fresh.some(f=>r < f.length); r++) fresh.forEach(f => { if (items.length < 8 && f[r]) items.push(f[r]); });  // livres mélangés
@@ -208,9 +211,7 @@ const good = q => q.type === "qcm" ? q.o[q.a] : q.a[0];
 const shown = (q,ans) => q.type === "qcm" ? q.o[ans] : (ans || "(vide)");
 
 function renderSession(el, ss){
-  if (!ss.items.length) { el.innerHTML = T.units.some((_,u) => readOk(u))
-    ? `<div class="card"><h2>Rien à revoir aujourd'hui</h2><p>Toutes les questions vues sont à jour. Revenez demain, ou lancez le quiz complet d'un livre.</p></div>`
-    : `<div class="card"><h2>Commencez par une fiche</h2><p>Le quiz du jour reprend les fiches que vous avez lues. Ouvrez l'onglet Fiches, lisez-en une jusqu'au bout, puis revenez.</p></div>`; return; }
+  if (!ss.items.length) { el.innerHTML = `<div class="card"><h2>Rien à revoir aujourd'hui</h2><p>Toutes les questions vues sont à jour. Revenez demain, ou lancez le quiz complet d'un livre.</p></div>`; return; }
   if (ss.i >= ss.items.length) return renderResult(el, ss);
   const it = ss.items[ss.i], q = Q(it.u,it.q), n = ss.items.length;
   const tag = ss === sessDay ? esc(T.units[it.u].label.replace(/ \(.*\)$/,"")) + " · " + esc(q.t) : esc(q.t);
@@ -249,6 +250,7 @@ function renderResult(el, ss){
     ss.sent = true;
     const unit = ss === sessDay ? null : T.units[ss.items[0].u];
     const texte = ss.items.map((it,k)=>{ const q = Q(it.u,it.q), r = ss.res[k]; return r.ok ? "" : `[${q.t}] ${q.q}\nRéponse : ${shown(q,r.ans)}${r.sure ? " (sûr)" : ""} ; attendu : ${good(q)}`; }).filter(Boolean).join("\n\n");
+    if (unit) { sessDay = daySession(); lockTabs(); render("day"); }
     sendResult({quiz: unit ? unit.name : "jour", matiere: T.key, num: unit ? unit.num : null, scores: by, texte: (unit ? "" : "Quiz du jour (questions mélangées). ") + (texte || "Aucune erreur.")});
   }
   const rows = Object.entries(by).map(([t,[a,b]])=>{ const g = a/b >= .8; return `<tr><td>${esc(t)}</td><td class="n">${a} / ${b}</td><td><span class="pill ${g?"ok":"ko"}">${g?"Acquis":"À revoir"}</span></td></tr>`; }).join("");
@@ -340,17 +342,16 @@ function bindTrain(cards){
 function weekKey(){ const d = new Date(), j = new Date(d.getFullYear(),0,1); return d.getFullYear() + "-S" + Math.ceil(((d - j)/864e5 + j.getDay() + 1)/7); }
 function renderDay(){
   if (!dayOk()) {
-    const u = T.units.findIndex((_,k) => !readOk(k));
-    const n = new Set(T.units.flatMap(un => un.fiches.map(f => f.name))).size;
-    $("day").innerHTML = `<div class="card"><h2>${T.defis ? (n > 1 ? "Les fiches d'abord" : "La fiche d'abord") : "Un livre d'abord"}</h2><p>${T.defis
-      ? `Les défis font appliquer le cours : lisez d'abord ${n > 1 ? `les ${n} fiches` : "la fiche"} de ${esc(T.name)}.`
-      : "Le jour reprend les livres que vous avez lus : lisez d'abord la fiche d'un livre jusqu'au bout."}</p><div class="row"><button class="next" id="go-fiche-d">Ouvrir la fiche</button></div></div>`;
-    $("go-fiche-d").addEventListener("click", () => openFiche(u)); return;
+    const u = Math.max(0, T.units.findIndex((un,k) => !quizDone(k) && (!T.defis || un.fiches.some(f => !covered(f.name))))), r = readOk(u);
+    $("day").innerHTML = `<div class="card"><h2>Le quiz d'abord</h2><p>${T.defis
+      ? `Les défis font appliquer le cours : ils s'ouvrent une fois la fiche lue et le quiz de ${esc(T.name)} fait.`
+      : "Le jour révise les livres dont vous avez fait le quiz : lisez la fiche d'un livre, faites son quiz, puis revenez."}</p><div class="row"><button class="next" id="go-fiche-d">${r ? "Faire le quiz" : "Ouvrir la fiche"}</button></div></div>`;
+    $("go-fiche-d").addEventListener("click", () => { if (!r) return openFiche(u); if (U !== u) setUnit(u); tab("quiz"); window.scrollTo(0, 0); }); return;
   }
   if (T.defis) { $("day").innerHTML = `<div class="card"><h2>Défis ${esc(T.name)}</h2><p>Les défis se font sur une page à part, dans Claude : vous écrivez votre prompt et je l'analyse tout de suite.</p><div class="row"><a class="next" href="${esc(DATA.defisUrl)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir les défis</a></div></div>`; return; }
   let refl = "", principe = "";
   if (T.key === "devperso") {
-    const all = []; T.units.forEach((_,u)=>{ if (readOk(u)) cardsOf(u).forEach(c=>all.push({...c, book:T.units[u].label})); });
+    const all = []; T.units.forEach((_,u)=>{ if (quizDone(u)) cardsOf(u).forEach(c=>all.push({...c, book:T.units[u].label})); });
     const wk = weekKey(), n = parseInt(wk.split("-S")[1]) + parseInt(wk), p = all[n % all.length], saved = R[wk]; principe = p.front;
     refl = `<details class="card refl"${saved ? "" : " open"}><summary><b>Principe de la semaine</b> · ${esc(p.book)}</summary>
       <p class="front">${esc(p.front)}</p><p>${md(p.back)}</p>
