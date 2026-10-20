@@ -107,7 +107,7 @@ body:not(.ready) .ctl,body:not(.ready) #pick,body:not(.ready) #sync{display:none
 <script type="text/plain" id="app">
 const DATA = window.__DATA__;
 // Livres Personal Dev : quiz devperso-N ↔ fiche (les quiz suivants, mixtes, ouvrent toutes les fiches du cours)
-const BOOKS = {"devperso-1":["Les 48 lois du pouvoir (Greene)","devperso-48-lois"],"devperso-2":["Influence (Cialdini)","devperso-influence"],"devperso-3":["Atomic Habits (Clear)","devperso-habitudes"],"devperso-4":["Les 7 habitudes (Covey)","devperso-covey"],"devperso-5":["Comment se faire des amis (Carnegie)","devperso-carnegie"],"devperso-6":["La psychologie de l'argent (Housel)","devperso-argent"],"devperso-7":["Le manager minute (Blanchard)","devperso-manager-minute"]};
+const BOOKS = {"devperso-1":["Les 48 lois du pouvoir (Greene)","devperso-48-lois"],"devperso-2":["Influence (Cialdini)","devperso-influence"],"devperso-3":["Atomic Habits (Clear)","devperso-habitudes"],"devperso-4":["Les 7 habitudes (Covey)","devperso-covey"],"devperso-5":["Comment se faire des amis (Carnegie)","devperso-carnegie"],"devperso-6":["La psychologie de l'argent (Housel)","devperso-argent"],"devperso-7":["Le manager minute (Blanchard)","devperso-manager-minute"],"devperso-8":["Trading in the Zone (Douglas)","devperso-trading-zone"]};
 const numOf = n => +(/-(\d+)$/.exec(n) || [0,0])[1];
 const TRACKS = DATA.subjects.map(s => {
   const pre = s.key + "-", fiches = Object.keys(DATA.fiches).filter(n => n.startsWith(pre)).sort().map(n => ({...DATA.fiches[n], name:n}));
