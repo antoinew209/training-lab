@@ -123,10 +123,9 @@ const INTERVAL = [0,1,3,7,14];               // jours avant de revoir une questi
 let S = (DATA.etat && DATA.etat.stats) || {};             // questions : {box, due, sureWrong}
 let F = (DATA.etat && DATA.etat.cards) || {};             // cartes : true = sue, false = à revoir
 let R = (DATA.etat && DATA.etat.refl) || {};              // réflexions hebdomadaires
-// Fiche d'abord : le quiz d'un livre/module s'ouvre une fois sa fiche lue (ou s'il est déjà commencé)
+// Fiche d'abord : aucune question d'un livre/module (quiz ou quiz du jour) avant la lecture de sa fiche
 const lu = f => !!F["lu|" + f];
-const started = u => T.units[u].quiz.questions.some((_,q) => S[qid(u,q)]);
-const readOk = u => T.units[u].fiches.every(f => lu(f.name)) || started(u);
+const readOk = u => T.units[u].fiches.every(f => lu(f.name));
 const gs = () => (window.google && google.script && google.script.run) ? google.script.run : null;
 const status = (msg) => { const el = document.getElementById("sync"); if (el) el.textContent = msg; };
 let saveTimer = null;
@@ -186,7 +185,7 @@ const Q = (u,q) => T.units[u].quiz.questions[q];
 function bookSession(){ const qs = T.units[U].quiz.questions; return { title: T.units[U].title, items: qs.map((_,q)=>({u:U,q})), i:0, res:[] }; }
 function daySession(){
   const due = [], fresh = T.units.map(()=>[]);
-  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ const s = S[qid(u,q)]; if (!s) { if (readOk(u)) fresh[u].push({u,q}); } else if (s.due <= TODAY) due.push({u,q,s}); }));
+  T.units.forEach((un,u)=>un.quiz.questions.forEach((_,q)=>{ if (!readOk(u)) return; const s = S[qid(u,q)]; if (!s) fresh[u].push({u,q}); else if (s.due <= TODAY) due.push({u,q,s}); }));
   due.sort((a,b)=> (b.s.sureWrong?1:0)-(a.s.sureWrong?1:0) || a.s.box-b.s.box);
   const items = due.slice(0,8).map(({u,q})=>({u,q}));
   for (let r = 0; items.length < 8 && fresh.some(f=>r < f.length); r++) fresh.forEach(f => { if (items.length < 8 && f[r]) items.push(f[r]); });  // livres mélangés
