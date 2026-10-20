@@ -24,6 +24,7 @@ body[data-track="devperso"]{--accent:var(--c-devperso)}body[data-track="code"]{-
 .track[aria-pressed="true"]{background:var(--tc);color:var(--bg)}
 .ctl{display:flex;min-width:0}.tabs4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:100%}.tabs4 .tab{padding:6px 2px;text-align:center;letter-spacing:.03em;border:2px solid var(--mc);color:var(--mc);background:transparent}
 .tabs4 .tab[aria-selected="true"]{background:var(--mc);border-color:var(--mc);color:var(--bg)}
+.tabs4 .tab.locked{opacity:.55}.tabs4 .tab.locked::after{content:" \1F512";font-size:.75em}
 #t-day{--mc:var(--m-day)}#t-quiz{--mc:var(--m-quiz)}#t-fiche{--mc:var(--m-fiche)}#t-prog{--mc:var(--m-prog)}
 .stack{display:flex;flex-direction:column;gap:10px}.row{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.seg{justify-content:flex-start}
 .next.alt{background:transparent;color:var(--accent);border:2px solid var(--accent)}
@@ -126,6 +127,9 @@ let R = (DATA.etat && DATA.etat.refl) || {};              // réflexions hebdoma
 // Fiche d'abord : aucune question d'un livre/module (quiz ou quiz du jour) avant la lecture de sa fiche
 const lu = f => !!F["lu|" + f];
 const readOk = u => T.units[u].fiches.every(f => lu(f.name));
+const dayOk = () => T.defis ? T.units.every((_,u) => readOk(u)) : T.units.some((_,u) => readOk(u));
+function lockTabs(){ $("t-day").classList.toggle("locked", !dayOk()); $("t-quiz").classList.toggle("locked", !readOk(U)); }
+function openFiche(u){ mode = "read"; if (U !== u) setUnit(u); else render("fiche"); tab("fiche"); window.scrollTo(0, 0); }
 const gs = () => (window.google && google.script && google.script.run) ? google.script.run : null;
 const status = (msg) => { const el = document.getElementById("sync"); if (el) el.textContent = msg; };
 let saveTimer = null;
@@ -154,6 +158,7 @@ function renderTracks(){
 function renderPick(){
   $("pick").innerHTML = T.units.map((u,k)=>`<option value="${k}"${k===U?" selected":""}>${esc(u.label)}</option>`).join("");
   $("pick").hidden = T.units.length < 2 || !(view === "quiz" || view === "fiche");
+  lockTabs();
 }
 function setUnit(k){ U = k; unitOf[T.key] = k; store.set("unit-"+T.key, k); sessQuiz = bookSession(); practice = null; renderPick(); render("quiz"); render("fiche"); }
 $("pick").addEventListener("change", () => setUnit(+$("pick").value));
@@ -176,7 +181,7 @@ function renderQuiz(){
   if (readOk(U)) return renderSession($("quiz"), sessQuiz);
   const fs = T.units[U].fiches.filter(f => !lu(f.name));
   $("quiz").innerHTML = `<div class="card"><h2>La fiche d'abord</h2><p>Lisez ${fs.length > 1 ? "les fiches" : "la fiche"} ${fs.map(f => "« " + esc(f.title) + " »").join(", ")} avant ce quiz : répondre de mémoire après la lecture fait bien mieux retenir que découvrir les questions avant.</p><div class="row"><button class="next" id="go-fiche">Ouvrir la fiche</button></div></div>`;
-  $("go-fiche").addEventListener("click", () => { mode = "read"; render("fiche"); tab("fiche"); window.scrollTo(0, 0); });
+  $("go-fiche").addEventListener("click", () => openFiche(U));
 }
 
 // ---------- questions et sessions ----------
@@ -334,10 +339,17 @@ function bindTrain(cards){
 // ---------- jour : quiz court + principe de la semaine ----------
 function weekKey(){ const d = new Date(), j = new Date(d.getFullYear(),0,1); return d.getFullYear() + "-S" + Math.ceil(((d - j)/864e5 + j.getDay() + 1)/7); }
 function renderDay(){
+  if (!dayOk()) {
+    const u = T.units.findIndex((_,k) => !readOk(k));
+    $("day").innerHTML = `<div class="card"><h2>${T.defis ? "Les fiches d'abord" : "Un livre d'abord"}</h2><p>${T.defis
+      ? `Les défis font appliquer le cours : lisez d'abord toutes les fiches de ${esc(T.name)}.`
+      : "Le jour reprend les livres que vous avez lus : lisez d'abord la fiche d'un livre jusqu'au bout."}</p><div class="row"><button class="next" id="go-fiche-d">Ouvrir la fiche</button></div></div>`;
+    $("go-fiche-d").addEventListener("click", () => openFiche(u)); return;
+  }
   if (T.defis) { $("day").innerHTML = `<div class="card"><h2>Défis ${esc(T.name)}</h2><p>Les défis se font sur une page à part, dans Claude : vous écrivez votre prompt et je l'analyse tout de suite.</p><div class="row"><a class="next" href="${esc(DATA.defisUrl)}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir les défis</a></div></div>`; return; }
   let refl = "", principe = "";
   if (T.key === "devperso") {
-    const all = []; T.units.forEach((_,u)=>cardsOf(u).forEach(c=>all.push({...c, book:T.units[u].label})));
+    const all = []; T.units.forEach((_,u)=>{ if (readOk(u)) cardsOf(u).forEach(c=>all.push({...c, book:T.units[u].label})); });
     const wk = weekKey(), n = parseInt(wk.split("-S")[1]) + parseInt(wk), p = all[n % all.length], saved = R[wk]; principe = p.front;
     refl = `<details class="card refl"${saved ? "" : " open"}><summary><b>Principe de la semaine</b> · ${esc(p.book)}</summary>
       <p class="front">${esc(p.front)}</p><p>${md(p.back)}</p>
