@@ -391,20 +391,53 @@ function renderProg(){
 startTrack();
 </script>
 <script>
-// Chargement : code d'accès (mémorisé sur l'appareil) → données → application
+// Chargement : code d'accès (mémorisé sur l'appareil) → données → application.
+// Hors ligne : dernière copie des données gardée sur l'appareil ; résultats et progression mis en file, envoyés au retour du réseau.
 (function(){
-  const API = "https://script.google.com/macros/s/AKfycbxdZ9ErXOVI9crBZkUGJlmmas2K7v_3B__jYfcPUPeGSw12DmszGCRiX3z4Xv-Q2_dDyQ/exec", KEY = "tl-key";
+  const API = "https://script.google.com/macros/s/AKfycbxdZ9ErXOVI9crBZkUGJlmmas2K7v_3B__jYfcPUPeGSw12DmszGCRiX3z4Xv-Q2_dDyQ/exec", KEY = "tl-key", DATA_KEY = "tl-data", QUEUE_KEY = "tl-queue";
   const $ = id => document.getElementById(id), box = () => $("day");
-  const get = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
-  const put = v => { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) {} };
+  const ls = {
+    get(k){ try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
+    json(k){ try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  };
+  const get = () => ls.get(KEY) || "", put = v => ls.set(KEY, v || null);
   const m = /[#&]k=([^&]+)/.exec(location.hash);
   if (m) { put(decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  const queue = () => ls.json(QUEUE_KEY) || [];
+  const setQueue = q => ls.set(QUEUE_KEY, q.length ? JSON.stringify(q) : null);
+  const note = msg => { const el = $("sync"); if (el) el.textContent = msg; };
+  const offlineMsg = () => note("Hors ligne : enregistré sur l'appareil, envoi au retour du réseau (" + queue().length + " en attente).");
+  function send(item){
+    return fetch(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item)) })
+      .then(r => r.json()).then(j => { if (j.error) throw Object.assign(new Error(j.error), { server: true }); return j; });
+  }
+  let flushing = false;
+  function flush(){
+    const q = queue();
+    if (flushing || !q.length) return;
+    flushing = true;
+    send(q[0]).then(() => true, e => e.server && e.message !== "code invalide").then(done => {   // refus définitif : on n'insiste pas
+      flushing = false;
+      if (!done) return offlineMsg();
+      setQueue(queue().slice(1));
+      if (queue().length) flush(); else note("Réseau retrouvé : tout est envoyé.");
+    });
+  }
+  window.addEventListener("online", flush);
 
   // Même interface que google.script.run, pour que le code de la page ne change pas
   function call(api, payload, ok, fail){
-    fetch(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get(), api: api }, payload)) })
-      .then(r => r.json()).then(j => j.error ? fail && fail(new Error(j.error)) : ok && ok(j))
-      .catch(e => fail && fail(e));
+    const item = Object.assign({ api: api }, payload);
+    if (api === "etat") { const d = ls.json(DATA_KEY); if (d) { d.etat = payload.etat; ls.set(DATA_KEY, JSON.stringify(d)); } }
+    const later = () => {                                  // une seule progression en attente : la plus récente
+      setQueue(queue().filter(x => !(api === "etat" && x.api === "etat")).concat([item]));
+      ok && ok({ queued: true }); setTimeout(offlineMsg, 0);
+    };
+    if (queue().length) { later(); return flush(); }       // garder l'ordre des envois
+    send(item).then(j => ok && ok(j), e => e.server ? fail && fail(e) : later());
   }
   function runner(fail, ok){
     return {
@@ -424,19 +457,32 @@ startTrack();
     $("k-in").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
     $("k-in").focus();
   }
+  function start(d, offline){
+    window.__DATA__ = d;
+    const s = document.createElement("script");
+    s.textContent = $("app").textContent;
+    document.body.appendChild(s);
+    document.body.classList.add("ready");
+    if (offline) note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau.");
+    else flush();
+  }
   function load(){
     const k = get();
     if (!k) return ask("Saisissez le code d'accès une fois : il reste mémorisé sur cet appareil.");
     box().innerHTML = '<p class="note">Chargement…</p>';
-    fetch(API + "?api=page&key=" + encodeURIComponent(k)).then(r => r.json()).then(d => {
+    const ctl = window.AbortController ? new AbortController() : null, timer = setTimeout(() => ctl && ctl.abort(), 10000);
+    fetch(API + "?api=page&key=" + encodeURIComponent(k), ctl ? { signal: ctl.signal } : {}).then(r => r.json()).then(d => {
+      clearTimeout(timer);
       if (d.error === "code invalide") { put(""); return ask("Code incorrect. Vérifiez-le dans le journal d'Apps Script (fonction installer)."); }
-      if (d.error) throw new Error(d.error);
-      window.__DATA__ = d;
-      const s = document.createElement("script");
-      s.textContent = $("app").textContent;
-      document.body.appendChild(s);
-      document.body.classList.add("ready");
+      if (d.error) throw Object.assign(new Error(d.error), { server: true });
+      const mine = queue().filter(x => x.api === "etat").pop();   // progression faite hors ligne, pas encore envoyée
+      if (mine) d.etat = mine.etat;
+      ls.set(DATA_KEY, JSON.stringify(d));
+      start(d, false);
     }).catch(e => {
+      clearTimeout(timer);
+      const c = !e.server && ls.json(DATA_KEY);
+      if (c) return start(c, true);
       box().innerHTML = '<div class="card"><p>Chargement impossible (' + String(e && e.message || e).replace(/</g, "&lt;") + ').</p>' +
         '<div class="row"><button class="next" id="k-retry">Réessayer</button></div></div>';
       $("k-retry").addEventListener("click", load);
