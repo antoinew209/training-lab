@@ -468,7 +468,7 @@ startTrack();
     // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
     if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
       const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
-      p.textContent = "✓ Prêt pour le mode avion · version 22/10 b";
+      p.textContent = "✓ Prêt pour le mode avion · version 22/10 c";
       document.querySelector(".wrap").appendChild(p);
     }).catch(() => {});
   }
