@@ -465,6 +465,12 @@ startTrack();
     document.body.classList.add("ready");
     if (offline) note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau.");
     else flush();
+    // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
+    if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
+      const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
+      p.textContent = "✓ Prêt pour le mode avion";
+      document.querySelector(".wrap").appendChild(p);
+    }).catch(() => {});
   }
   function load(){
     const k = get();
