@@ -443,7 +443,7 @@ startTrack();
     return fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {})).then(r => r.json()).finally(() => clearTimeout(t));
   }
   const refused = j => { if (j && j.error) throw Object.assign(new Error(j.error), { server: true }); return j; };
-  const send = item => timed(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item, { id: undefined })) }).then(refused);
+  const send = item => timed(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item, { id: undefined, m: undefined })) }).then(refused);
   const drop = id => setQueue(queue().filter(x => x.id !== id));
   const outcome = {};
   let running = null, wasOffline = false;
@@ -454,7 +454,7 @@ startTrack();
       if (!item) { if (wasOffline) { wasOffline = false; note("Réseau retrouvé : tout est envoyé."); } return; }
       try {
         let out = item;
-        if (item.api === "etat") {                            // compléter avec ce que le lab a reçu d'ailleurs entre-temps
+        if (item.api === "etat" && item.m !== false) {        // faite hors ligne : compléter avec ce que le lab a reçu d'ailleurs
           const d = refused(await timed(API + "?api=page&key=" + encodeURIComponent(get())));
           adopt(d.etat || {});
           out = Object.assign({}, item, { etat: merge(d.etat, item.etat) });
@@ -478,7 +478,7 @@ startTrack();
   // Même interface que google.script.run, pour que le code de la page ne change pas
   let seq = 0;
   function call(api, payload, ok, fail){
-    const item = Object.assign({ api: api, id: Date.now() + "-" + (seq++) }, payload);
+    const item = Object.assign({ api: api, id: Date.now() + "-" + (seq++), m: !fresh || wasOffline }, payload);
     if (api === "etat") { const d = ls.json(DATA_KEY); if (d) { d.etat = payload.etat; ls.set(DATA_KEY, JSON.stringify(d)); } }
     setQueue(queue().filter(x => !(api === "etat" && x.api === "etat")).concat([item]));   // une seule progression en file : la plus récente
     flush().then(() => {
@@ -507,38 +507,63 @@ startTrack();
     $("k-in").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
     $("k-in").focus();
   }
-  function start(d, offline){
+  // Ouverture immédiate depuis la copie de l'appareil ; les données du lab arrivent ensuite en arrière-plan
+  let fresh = false;                                         // données du lab reçues pendant cette visite
+  const content = d => JSON.stringify([d.subjects, d.quiz, d.fiches, d.defisUrl]);   // tout sauf la progression
+  const fetchPage = () => timed(API + "?api=page&key=" + encodeURIComponent(get()));
+  function keep(d){                                          // garder la copie, avec la progression pas encore envoyée
+    const mine = queue().filter(x => x.api === "etat").pop();
+    if (mine) d.etat = merge(d.etat, mine.etat);
+    ls.set(DATA_KEY, JSON.stringify(d));
+  }
+  function banner(id, text, label, action){
+    const wrap = document.querySelector(".wrap");
+    if (!wrap || $(id)) return;
+    const el = document.createElement("div"); el.id = id; el.className = "card";
+    el.innerHTML = '<p></p><div class="row"><button class="next">' + label + '</button></div>';
+    el.querySelector("p").textContent = text;
+    el.querySelector("button").addEventListener("click", action);
+    wrap.insertBefore(el, wrap.children[1] || null);
+  }
+  function start(d){
     window.__DATA__ = d;
     const s = document.createElement("script");
     s.textContent = $("app").textContent;
     document.body.appendChild(s);
     document.body.classList.add("ready");
-    if (offline) { note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau."); pending(); }
-    else flush();
+    pending();
     // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
     if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
       const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
-      p.textContent = "✓ Prêt pour le mode avion · version 26/10 c";
+      p.textContent = "✓ Prêt pour le mode avion · version 27/10";
       document.querySelector(".wrap").appendChild(p);
     }).catch(() => {});
+  }
+  function refresh(old){
+    fetchPage().then(d => {
+      if (d.error === "code invalide") { put(""); ls.set(DATA_KEY, null); return location.reload(); }
+      refused(d);
+      keep(d); fresh = true;
+      adopt(d.etat || {});                                   // progression faite ailleurs (PC)
+      if (content(d) !== content(old))
+        banner("tl-update", "Nouveaux quiz ou fiches disponibles.", "Afficher", () => location.reload());
+      flush();
+    }).catch(e => {
+      if (!e.server) { note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau."); pending(); }
+    });
   }
   function load(){
     const k = get();
     if (!k) return ask("Saisissez le code d'accès une fois : il reste mémorisé sur cet appareil.");
+    const cached = ls.json(DATA_KEY);
+    if (cached) { start(cached); return refresh(cached); }
     box().innerHTML = '<p class="note">Chargement…</p>';
-    const ctl = window.AbortController ? new AbortController() : null, timer = setTimeout(() => ctl && ctl.abort(), 10000);
-    fetch(API + "?api=page&key=" + encodeURIComponent(k), ctl ? { signal: ctl.signal } : {}).then(r => r.json()).then(d => {
-      clearTimeout(timer);
+    fetchPage().then(d => {
       if (d.error === "code invalide") { put(""); return ask("Code incorrect. Vérifiez-le dans le journal d'Apps Script (fonction installer)."); }
-      if (d.error) throw Object.assign(new Error(d.error), { server: true });
-      const mine = queue().filter(x => x.api === "etat").pop();   // progression faite hors ligne, pas encore envoyée
-      if (mine) d.etat = merge(d.etat, mine.etat);
-      ls.set(DATA_KEY, JSON.stringify(d));
-      start(d, false);
+      refused(d);
+      keep(d); fresh = true;
+      start(d); flush();
     }).catch(e => {
-      clearTimeout(timer);
-      const c = !e.server && ls.json(DATA_KEY);
-      if (c) return start(c, true);
       box().innerHTML = '<div class="card"><p>Chargement impossible (' + String(e && e.message || e).replace(/</g, "&lt;") + ').</p>' +
         '<div class="row"><button class="next" id="k-retry">Réessayer</button></div></div>';
       $("k-retry").addEventListener("click", load);
