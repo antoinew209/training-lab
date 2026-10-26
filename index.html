@@ -410,6 +410,31 @@ startTrack();
   const setQueue = q => ls.set(QUEUE_KEY, q.length ? JSON.stringify(q) : null);
   const note = msg => { const el = $("sync"); if (el) el.textContent = msg; };
   const offlineMsg = () => note("Hors ligne : enregistré sur l'appareil, envoi au retour du réseau (" + queue().length + " en attente).");
+  // Bandeau en haut tant que des envois attendent, avec un bouton pour les envoyer tout de suite
+  function pending(){
+    const n = queue().length, wrap = document.querySelector(".wrap");
+    let el = $("tl-pending");
+    if (!n) { if (el) el.remove(); return; }
+    if (!wrap) return;
+    if (!el) {
+      el = document.createElement("div"); el.id = "tl-pending"; el.className = "card";
+      el.innerHTML = '<p id="tl-pending-t"></p><div class="row"><button class="next" id="tl-pending-b">Envoyer maintenant</button></div>';
+      wrap.insertBefore(el, wrap.children[1] || null);
+      $("tl-pending-b").addEventListener("click", () => { $("tl-pending-t").textContent = "Envoi en cours…"; flush(); });
+    }
+    $("tl-pending-t").textContent = n + " envoi" + (n > 1 ? "s" : "") + " fait" + (n > 1 ? "s" : "") + " hors ligne pas encore reçu" + (n > 1 ? "s" : "") + " par le lab.";
+  }
+  // Progression : on complète avec ce que le serveur a et que l'appareil n'a pas (travail fait ailleurs entre-temps)
+  const merge = (server, local) => {
+    const s = server || {}, l = local || {};
+    return { stats: Object.assign({}, s.stats, l.stats), cards: Object.assign({}, s.cards, l.cards), refl: Object.assign({}, s.refl, l.refl) };
+  };
+  function adopt(server){                                  // l'état en mémoire de la page reçoit aussi ces ajouts
+    try {
+      [[S, server.stats], [F, server.cards], [R, server.refl]].forEach(([mine, theirs]) => Object.keys(theirs || {}).forEach(k => { if (!(k in mine)) mine[k] = theirs[k]; }));
+      lockTabs();
+    } catch (e) {}
+  }
   function send(item){
     return fetch(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item)) })
       .then(r => r.json()).then(j => { if (j.error) throw Object.assign(new Error(j.error), { server: true }); return j; });
@@ -417,16 +442,29 @@ startTrack();
   let flushing = false;
   function flush(){
     const q = queue();
+    pending();
     if (flushing || !q.length) return;
     flushing = true;
-    send(q[0]).then(() => true, e => e.server && e.message !== "code invalide").then(done => {   // refus définitif : on n'insiste pas
+    const item = q[0];
+    const ready = item.api !== "etat" ? Promise.resolve(item)
+      : fetch(API + "?api=page&key=" + encodeURIComponent(get())).then(r => r.json()).then(d => {
+          if (d.error) throw Object.assign(new Error(d.error), { server: true });
+          adopt(d.etat || {});
+          return Object.assign({}, item, { etat: merge(d.etat, item.etat) });
+        });
+    ready.then(send).then(() => true, e => e.server && e.message !== "code invalide").then(done => {   // refus définitif : on n'insiste pas
       flushing = false;
-      if (!done) return offlineMsg();
+      if (!done) { pending(); return offlineMsg(); }
       setQueue(queue().slice(1));
-      if (queue().length) flush(); else note("Réseau retrouvé : tout est envoyé.");
+      if (queue().length) flush(); else { pending(); note("Réseau retrouvé : tout est envoyé."); }
     });
   }
+  // L'iPhone met l'app en pause : au retour (réseau revenu pendant la pause), on renvoie aussi
   window.addEventListener("online", flush);
+  window.addEventListener("focus", flush);
+  window.addEventListener("pageshow", flush);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flush(); });
+  setInterval(() => { if (queue().length && navigator.onLine !== false) flush(); }, 30000);
 
   // Même interface que google.script.run, pour que le code de la page ne change pas
   function call(api, payload, ok, fail){
@@ -434,7 +472,7 @@ startTrack();
     if (api === "etat") { const d = ls.json(DATA_KEY); if (d) { d.etat = payload.etat; ls.set(DATA_KEY, JSON.stringify(d)); } }
     const later = () => {                                  // une seule progression en attente : la plus récente
       setQueue(queue().filter(x => !(api === "etat" && x.api === "etat")).concat([item]));
-      ok && ok({ queued: true }); setTimeout(offlineMsg, 0);
+      ok && ok({ queued: true }); setTimeout(() => { offlineMsg(); pending(); }, 0);
     };
     if (queue().length) { later(); return flush(); }       // garder l'ordre des envois
     send(item).then(j => ok && ok(j), e => e.server ? fail && fail(e) : later());
@@ -463,12 +501,12 @@ startTrack();
     s.textContent = $("app").textContent;
     document.body.appendChild(s);
     document.body.classList.add("ready");
-    if (offline) note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau.");
+    if (offline) { note("Hors ligne : version gardée sur l'appareil. Vos réponses partiront au retour du réseau."); pending(); }
     else flush();
     // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
     if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
       const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
-      p.textContent = "✓ Prêt pour le mode avion · version 22/10 c";
+      p.textContent = "✓ Prêt pour le mode avion · version 26/10";
       document.querySelector(".wrap").appendChild(p);
     }).catch(() => {});
   }
@@ -482,7 +520,7 @@ startTrack();
       if (d.error === "code invalide") { put(""); return ask("Code incorrect. Vérifiez-le dans le journal d'Apps Script (fonction installer)."); }
       if (d.error) throw Object.assign(new Error(d.error), { server: true });
       const mine = queue().filter(x => x.api === "etat").pop();   // progression faite hors ligne, pas encore envoyée
-      if (mine) d.etat = mine.etat;
+      if (mine) d.etat = merge(d.etat, mine.etat);
       ls.set(DATA_KEY, JSON.stringify(d));
       start(d, false);
     }).catch(e => {
