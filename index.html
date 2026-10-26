@@ -406,7 +406,7 @@ startTrack();
   if (m) { put(decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  const queue = () => ls.json(QUEUE_KEY) || [];
+  const queue = () => (ls.json(QUEUE_KEY) || []).map((x, i) => x.id ? x : Object.assign(x, { id: "ancien-" + i }));
   const setQueue = q => ls.set(QUEUE_KEY, q.length ? JSON.stringify(q) : null);
   const note = msg => { const el = $("sync"); if (el) el.textContent = msg; };
   const offlineMsg = () => note("Hors ligne : enregistré sur l'appareil, envoi au retour du réseau (" + queue().length + " en attente).");
@@ -435,47 +435,59 @@ startTrack();
       lockTabs();
     } catch (e) {}
   }
-  function send(item){
-    return fetch(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item)) })
-      .then(r => r.json()).then(j => { if (j.error) throw Object.assign(new Error(j.error), { server: true }); return j; });
+  // Tout envoi est d'abord rangé sur l'appareil, puis envoyé ; il ne quitte la file qu'une fois reçu par le lab.
+  // Ainsi rien ne se perd si le réseau ne répond pas (wifi d'avion) ou si l'app est fermée pendant l'envoi.
+  const LIMIT = 15000;                                       // au-delà, on considère qu'il n'y a pas de réseau
+  function timed(url, opts){
+    const ctl = window.AbortController ? new AbortController() : null, t = setTimeout(() => ctl && ctl.abort(), LIMIT);
+    return fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {})).then(r => r.json()).finally(() => clearTimeout(t));
   }
-  let flushing = false;
-  function flush(){
-    const q = queue();
-    pending();
-    if (flushing || !q.length) return;
-    flushing = true;
-    const item = q[0];
-    const ready = item.api !== "etat" ? Promise.resolve(item)
-      : fetch(API + "?api=page&key=" + encodeURIComponent(get())).then(r => r.json()).then(d => {
-          if (d.error) throw Object.assign(new Error(d.error), { server: true });
+  const refused = j => { if (j && j.error) throw Object.assign(new Error(j.error), { server: true }); return j; };
+  const send = item => timed(API, { method: "POST", body: JSON.stringify(Object.assign({ key: get() }, item, { id: undefined })) }).then(refused);
+  const drop = id => setQueue(queue().filter(x => x.id !== id));
+  const outcome = {};
+  let running = null, wasOffline = false;
+  async function loop(){
+    for (;;) {
+      pending();
+      const item = queue()[0];
+      if (!item) { if (wasOffline) { wasOffline = false; note("Réseau retrouvé : tout est envoyé."); } return; }
+      try {
+        let out = item;
+        if (item.api === "etat") {                            // compléter avec ce que le lab a reçu d'ailleurs entre-temps
+          const d = refused(await timed(API + "?api=page&key=" + encodeURIComponent(get())));
           adopt(d.etat || {});
-          return Object.assign({}, item, { etat: merge(d.etat, item.etat) });
-        });
-    ready.then(send).then(() => true, e => e.server && e.message !== "code invalide").then(done => {   // refus définitif : on n'insiste pas
-      flushing = false;
-      if (!done) { pending(); return offlineMsg(); }
-      setQueue(queue().slice(1));
-      if (queue().length) flush(); else { pending(); note("Réseau retrouvé : tout est envoyé."); }
-    });
+          out = Object.assign({}, item, { etat: merge(d.etat, item.etat) });
+        }
+        outcome[item.id] = { ok: await send(out) };
+        drop(item.id);
+      } catch (e) {
+        if (e.server && e.message !== "code invalide") { outcome[item.id] = { err: e }; drop(item.id); continue; }   // refus définitif
+        wasOffline = true; pending(); offlineMsg(); return;
+      }
+    }
   }
+  function flush(){ if (!running) running = loop().catch(() => {}).then(() => { running = null; }); return running; }
   // L'iPhone met l'app en pause : au retour (réseau revenu pendant la pause), on renvoie aussi
   window.addEventListener("online", flush);
   window.addEventListener("focus", flush);
   window.addEventListener("pageshow", flush);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flush(); });
-  setInterval(() => { if (queue().length && navigator.onLine !== false) flush(); }, 30000);
+  setInterval(() => { if (queue().length) flush(); }, 30000);
 
   // Même interface que google.script.run, pour que le code de la page ne change pas
+  let seq = 0;
   function call(api, payload, ok, fail){
-    const item = Object.assign({ api: api }, payload);
+    const item = Object.assign({ api: api, id: Date.now() + "-" + (seq++) }, payload);
     if (api === "etat") { const d = ls.json(DATA_KEY); if (d) { d.etat = payload.etat; ls.set(DATA_KEY, JSON.stringify(d)); } }
-    const later = () => {                                  // une seule progression en attente : la plus récente
-      setQueue(queue().filter(x => !(api === "etat" && x.api === "etat")).concat([item]));
-      ok && ok({ queued: true }); setTimeout(() => { offlineMsg(); pending(); }, 0);
-    };
-    if (queue().length) { later(); return flush(); }       // garder l'ordre des envois
-    send(item).then(j => ok && ok(j), e => e.server ? fail && fail(e) : later());
+    setQueue(queue().filter(x => !(api === "etat" && x.api === "etat")).concat([item]));   // une seule progression en file : la plus récente
+    flush().then(() => {
+      const o = outcome[item.id]; delete outcome[item.id];
+      if (o && o.err) fail && fail(o.err);
+      else if (o) ok && ok(o.ok);
+      else if (queue().some(x => x.id === item.id)) { ok && ok({ queued: true }); offlineMsg(); }
+      else ok && ok({});                                    // remplacée par une progression plus récente
+    });
   }
   function runner(fail, ok){
     return {
@@ -506,7 +518,7 @@ startTrack();
     // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
     if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
       const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
-      p.textContent = "✓ Prêt pour le mode avion · version 26/10 b";
+      p.textContent = "✓ Prêt pour le mode avion · version 26/10 c";
       document.querySelector(".wrap").appendChild(p);
     }).catch(() => {});
   }
