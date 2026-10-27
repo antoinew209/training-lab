@@ -98,6 +98,7 @@ body:not(.ready) .ctl,body:not(.ready) #pick,body:not(.ready) #sync{display:none
     </div>
   </div>
   <select class="pick" id="pick" aria-label="Livre ou module"></select>
+  <section id="addbook" hidden></section>
   <section id="day"></section>
   <section id="quiz" hidden></section>
   <section id="fiche" hidden></section>
@@ -164,12 +165,37 @@ function renderTracks(){
   TRACKS.forEach((t,k)=>$("tr"+k).addEventListener("click",()=>{ if (t !== T) { T = t; store.set("track", t.key); startTrack(); } }));
 }
 function renderPick(){
-  $("pick").innerHTML = T.units.map((u,k)=>`<option value="${k}"${k===U?" selected":""}>${esc(u.label)}</option>`).join("");
+  $("pick").innerHTML = T.units.map((u,k)=>`<option value="${k}"${k===U?" selected":""}>${esc(u.label)}</option>`).join("")
+    + (T.key === "devperso" ? `<option value="add">＋ Ajouter un livre…</option>` : "");
   $("pick").hidden = T.units.length < 2 || !(view === "quiz" || view === "fiche");
   lockTabs();
 }
 function setUnit(k){ U = k; unitOf[T.key] = k; store.set("unit-"+T.key, k); sessQuiz = bookSession(); practice = null; renderPick(); render("quiz"); render("fiche"); }
-$("pick").addEventListener("change", () => setUnit(+$("pick").value));
+$("pick").addEventListener("change", () => { if ($("pick").value === "add") { $("pick").value = U; return askBook(); } setUnit(+$("pick").value); });
+
+// ---------- ajouter un livre : la demande part au lab, la routine du soir écrit la fiche et le quiz ----------
+const asked = () => store.get("livres-demandes") || [];
+function askBook(){
+  const known = T.units.map(u => norm(u.label));
+  const waiting = asked().filter(b => !known.some(l => l.includes(norm(b.titre))));   // pas encore arrivés
+  store.set("livres-demandes", waiting);
+  const el = $("addbook"); el.hidden = false;
+  el.innerHTML = `<div class="card"><h2>Ajouter un livre</h2>
+    <p>Donnez le titre et l'auteur : la routine du soir (20h15) prépare la fiche et le quiz, puis vous prévient.</p>
+    <label class="hint" for="ab-t">Titre</label><input class="ti" id="ab-t" autocomplete="off">
+    <label class="hint" for="ab-a">Auteur</label><input class="ti" id="ab-a" autocomplete="off">
+    ${waiting.length ? `<p class="hint">En attente : ${waiting.map(b => esc(b.titre) + " (demandé le " + esc(b.date) + ")").join(", ")}</p>` : ""}
+    <div class="row"><span class="hint" id="ab-s"></span><button class="next alt" id="ab-x">Fermer</button><button class="next" id="ab-ok">Demander</button></div></div>`;
+  $("ab-x").addEventListener("click", () => { el.hidden = true; });
+  $("ab-ok").addEventListener("click", () => {
+    const titre = $("ab-t").value.trim(), auteur = $("ab-a").value.trim();
+    if (titre.length < 2) { $("ab-s").textContent = "Indiquez au moins le titre."; return; }
+    sendResult({quiz:"demande-livre", matiere:"devperso", num:null, scores:{}, texte:"Livre demandé : " + titre + (auteur ? " — " + auteur : "")});
+    store.set("livres-demandes", asked().concat([{titre, auteur, date: new Date().toLocaleDateString("fr-FR")}]));
+    askBook(); $("ab-s").textContent = "Demande envoyée : « " + titre + " » arrivera après la routine du soir.";
+  });
+  $("ab-t").focus();
+}
 function startTrack(){
   renderTracks();
   let k = unitOf[T.key] ?? store.get("unit-"+T.key) ?? 0; if (!(k >= 0 && k < T.units.length)) k = 0;
@@ -177,7 +203,7 @@ function startTrack(){
 }
 const VIEWS = ["day","quiz","fiche","prog"];
 function tab(v){
-  view = v; store.set("view", v);
+  view = v; store.set("view", v); $("addbook").hidden = true;
   VIEWS.forEach(x => { $(x).hidden = x !== v; $("t-"+x).setAttribute("aria-selected", x === v); });
   if (v === "prog") render("prog");
   renderPick();
@@ -535,7 +561,7 @@ startTrack();
     // repère visible : la copie hors ligne est prête (page en cache + données sur l'appareil)
     if ("serviceWorker" in navigator && ls.get(DATA_KEY)) navigator.serviceWorker.ready.then(() => {
       const p = document.createElement("p"); p.className = "note"; p.id = "offline-ok";
-      p.textContent = "✓ Prêt pour le mode avion · version 27/10";
+      p.textContent = "✓ Prêt pour le mode avion · version 27/10 b";
       document.querySelector(".wrap").appendChild(p);
     }).catch(() => {});
   }

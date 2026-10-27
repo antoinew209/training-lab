@@ -2,7 +2,7 @@
 // Page : copie d'abord (s'ouvre tout de suite, même sans réseau), mise à jour en arrière-plan pour la prochaine ouverture.
 // L'API (script.google.com) ne passe jamais par ce cache : les données hors ligne sont gérées par la page.
 // Changer CACHE à chaque modification de ce fichier : l'appareil reprend alors une copie neuve de la page.
-const CACHE = "tl-v6", PAGE = "./";
+const CACHE = "tl-v7", PAGE = "./";
 // iPhone : une réponse gardée après une redirection refuse de s'afficher hors ligne ; on la garde « propre ».
 const clean = res => res.redirected
   ? res.blob().then(b => new Response(b, { status: res.status, statusText: res.statusText, headers: res.headers }))
